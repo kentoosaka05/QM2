@@ -1,0 +1,180 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "authorship_tag": "ABX9TyPY8guejZqpwra7NkyixVx4",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/kentoosaka05/QM2/blob/main/Kento%20work\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "Ex4zfFT4QLxN"
+      },
+      "outputs": [],
+      "source": [
+        "import pandas as pd\n",
+        "\n",
+        "df_asylum = pd.read_csv('Asylum Seeker accommodation.csv', encoding='latin1')\n",
+        "df_protest = pd.read_csv('lad_code.csv', encoding='latin1') # The file your group member made\n",
+        "\n",
+        "# Convert People column to numeric, coercing errors to NaN\n",
+        "df_asylum['People'] = pd.to_numeric(df_asylum['People'], errors='coerce')\n",
+        "\n",
+        "# Define Visible types\n",
+        "visible_types = [\n",
+        "    'Contingency Accommodation - Hotel',\n",
+        "    'Contingency Accommodation - Other',\n",
+        "    'Other Accommodation'\n",
+        "]\n",
+        "\n",
+        "# Calculate total visible people per LA per Quarter\n",
+        "la_visible = df_asylum[df_asylum['Accommodation Type'].isin(visible_types)].groupby(\n",
+        "    ['LAD Code', 'Year-Quarter']\n",
+        ")['People'].sum().reset_index()\n",
+        "\n",
+        "# Sort\n",
+        "la_visible = la_visible.sort_values(['LAD Code', 'Year-Quarter'])"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "f0139f40"
+      },
+      "source": [
+        "display(la_visible.head())"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "la_visible['People'] = pd.to_numeric(la_visible['People'], errors='coerce')\n",
+        "\n",
+        "# Use .diff() within each group\n",
+        "la_visible['shock_change'] = la_visible.groupby('LAD Code')['People'].diff()\n",
+        "\n",
+        "# Fill NaN values with 0\n",
+        "la_visible['shock_change'] = la_visible['shock_change'].fillna(0)"
+      ],
+      "metadata": {
+        "id": "LGgQWyCRTb-P"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "01e12560"
+      },
+      "source": [
+        "display(la_visible.head())"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Aggregate the protests by LAD and Quarter\n",
+        "\n",
+        "# Convert Date column to datetime objects\n",
+        "df_protest['Date'] = pd.to_datetime(df_protest['Date'], format='%d/%m/%Y')\n",
+        "\n",
+        "# Create an Year-Quarter column in df_protest to match df_asylum format\n",
+        "df_protest['Year-Quarter'] = df_protest['Date'].dt.year.astype(str) + ' Q' + df_protest['Date'].dt.quarter.astype(str)\n",
+        "\n",
+        "protest_counts = df_protest.groupby(['lad_code', 'Year-Quarter']).size().reset_index(name='protest_count')\n",
+        "\n",
+        "# Merge the datasets\n",
+        "final_analysis = pd.merge(\n",
+        "    la_visible,\n",
+        "    protest_counts,\n",
+        "    left_on=['LAD Code', 'Year-Quarter'],\n",
+        "    right_on=['lad_code', 'Year-Quarter'],\n",
+        "    how='left'\n",
+        ")\n",
+        "\n",
+        "# Replace NaNs in protest_count with 0\n",
+        "final_analysis['protest_count'] = final_analysis['protest_count'].fillna(0)\n",
+        "\n",
+        "# Final Correlation Calculation\n",
+        "correlation = final_analysis['shock_change'].corr(final_analysis['protest_count'])\n",
+        "print(f\"The Pearson correlation coefficient is: {correlation:.3f}\")"
+      ],
+      "metadata": {
+        "id": "QEMTliuqVcgp"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "e2152259"
+      },
+      "source": [
+        "display(protest_counts.head())"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import matplotlib.pyplot as plt\n",
+        "import seaborn as sns\n",
+        "\n",
+        "# Set the visual style\n",
+        "sns.set_theme(style=\"whitegrid\")\n",
+        "plt.figure(figsize=(12, 8))\n",
+        "\n",
+        "# Create the Regression Plot\n",
+        "plot = sns.regplot(\n",
+        "    data=final_analysis,\n",
+        "    x='shock_change',\n",
+        "    y='protest_count',\n",
+        "    scatter_kws={'alpha':0.5, 's':50, 'color':'#2c3e50'}, # Style the dots\n",
+        "    line_kws={'color':'#e74c3c', 'lw':3}                # Style the line\n",
+        ")\n",
+        "\n",
+        "# Add Titles and Labels\n",
+        "plt.title('Analysis 2: Local Authority \"Arrival Shocks\" vs. Protest Frequency', fontsize=16, pad=20)\n",
+        "plt.xlabel('Quarterly Change in Visible Asylum Population (LAD Level)', fontsize=12)\n",
+        "plt.ylabel('Total Number of Protests per Quarter', fontsize=12)\n",
+        "\n",
+        "# Highlight specific outliers (like high-growth/high-protest areas)\n",
+        "plt.show()"
+      ],
+      "metadata": {
+        "id": "7qIMnTCran3K"
+      },
+      "execution_count": null,
+      "outputs": []
+    }
+  ]
+}
